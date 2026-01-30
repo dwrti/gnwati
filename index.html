@@ -2,110 +2,119 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مشغل فيديو أيفون المتطور</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>بث مباشر - استقبال 📺</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
-        /* تنسيق أنيق ليناسب واجهة الأيفون */
-        body {
-            margin: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            background-color: #000;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        html, body { 
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            background-color: #000; color: #eee;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            overflow-x: hidden;
         }
-
-        .video-container {
-            width: 90%;
-            max-width: 400px;
-            border-radius: 20px;
-            overflow: hidden;
-            box-shadow: 0 10px 30px rgba(255, 255, 255, 0.1);
-            background: #1a1a1a;
-            position: relative;
+        .video-container { width: 100%; max-width: 900px; margin: 0 auto; background: #000; }
+        video { width: 100%; aspect-ratio: 16/9; display: block; outline: none; }
+        #syncNotice {
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: rgba(0, 255, 0, 0.1); border: 1px solid #2e7d32;
+            padding: 10px 20px; border-radius: 20px; font-size: 12px; color: #4caf50;
+            z-index: 100; pointer-events: none; opacity: 0.8;
         }
-
-        video {
-            width: 100%;
-            display: block;
-            /* خاصية هامة جداً للأيفون */
-            object-fit: cover; 
-        }
-
-        .status-tag {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(0, 0, 0, 0.5);
-            color: #fff;
-            padding: 5px 10px;
-            border-radius: 10px;
-            font-size: 12px;
-            pointer-events: none;
+        .overlay-play {
+            position: absolute; top: 0; left: 0; width: 100%; height: 56.25vw;
+            background: rgba(0,0,0,0.6); display: flex; align-items: center;
+            justify-content: center; z-index: 50; cursor: pointer;
         }
     </style>
 </head>
 <body>
 
     <div class="video-container">
-        <div class="status-tag">تشغيل تلقائي</div>
-        <video 
-            id="myVideo" 
-            autoplay 
-            muted 
-            playsinline 
-            controls>
-            <source src="https://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4">
-        </video>
+        <video id="viewerPlayer" playsinline></video>
     </div>
 
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js";
-        import { getStorage, ref, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+    <div id="syncNotice">المزامنة مع الأدمن نشطة 🟢</div>
 
-        // إعدادات Firebase الخاصة بك
-        const firebaseConfig = {
-            apiKey: "AIzaSyCDQm_qocYr7-QuAMIafyC6PuAzSbs8Q8k",
-            authDomain: "axnt-68677.firebaseapp.com",
-            databaseURL: "https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app",
-            projectId: "axnt-68677",
-            storageBucket: "axnt-68677.firebasestorage.app",
-            messagingSenderId: "838335964467",
-            appId: "1:838335964467:web:5152329be098c9339a0a46",
-            measurementId: "G-D1XT800Y0M"
-        };
+    <script>
+        var videoElement = document.getElementById('viewerPlayer');
+        var hls = new Hls();
+        var dbUrl = "https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app/live_stream.json";
+        var presenceUrl = "https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app/presence";
+        var lastUrl = "";
+        var myUserId = "viewer_" + Math.random().toString(36).substring(7);
 
-        // تشغيل Firebase
-        const app = initializeApp(firebaseConfig);
-        const storage = getStorage(app);
+        // تحديث التواجد (ليراك الأدمن في العداد)
+        function updatePresence() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("PUT", presenceUrl + "/" + myUserId + ".json", true);
+            xhr.send(JSON.stringify(Date.now()));
+        }
 
-        const videoElement = document.getElementById('myVideo');
+        function playMedia(url) {
+            if (!url) { 
+                videoElement.src = ""; 
+                if (hls) hls.destroy(); 
+                lastUrl = ""; 
+                return; 
+            }
+            if (url === lastUrl) return;
+            lastUrl = url;
 
-        // دالة جلب الفيديو من Storage وتشغيله
-        async function playFirebaseVideo() {
-            try {
-                // ملاحظة: استبدل 'your-video.mp4' باسم ملفك الفعلي في Firebase Storage
-                const videoRef = ref(storage, 'your-video.mp4'); 
-                const url = await getDownloadURL(videoRef);
-                
+            if (Hls.isSupported() && (url.includes('m3u8') || url.includes('.ts'))) {
+                hls.destroy();
+                hls = new Hls();
+                hls.loadSource(url);
+                hls.attachMedia(videoElement);
+            } else {
                 videoElement.src = url;
-
-                // محاولة التشغيل الإجباري
-                await videoElement.play();
-                console.log("الطفل (الكود) يعمل بنجاح!");
-            } catch (error) {
-                console.log("التشغيل التلقائي يعمل حالياً على الفيديو التجريبي، تأكد من رفع ملفك لـ Firebase.");
             }
         }
 
-        // تنفيذ الوظيفة بمجرد تحميل الصفحة
-        window.addEventListener('load', () => {
-            // نضمن أن الفيديو صامت لأن الأيفون يرفض التشغيل التلقائي بصوت
-            videoElement.muted = true;
-            playFirebaseVideo();
-        });
+        function syncWithAdmin() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", dbUrl, true);
+            xhr.onload = function () {
+                if (xhr.status === 200) {
+                    var data = JSON.parse(xhr.responseText);
+                    if (!data) return;
+
+                    // 1. مزامنة الرابط
+                    if (data.url !== lastUrl) {
+                        playMedia(data.url);
+                    }
+
+                    // 2. مزامنة حالة التشغيل (إيقاف/تشغيل)
+                    if (data.status === "playing" && videoElement.paused) {
+                        videoElement.play().catch(function() {
+                            // إذا منع المتصفح التشغيل التلقائي، نكتم الصوت ليشتغل
+                            videoElement.muted = true;
+                            videoElement.play();
+                        });
+                    } else if (data.status === "paused" && !videoElement.paused) {
+                        videoElement.pause();
+                    }
+
+                    // 3. مزامنة الوقت (إذا زاد الفارق عن ثانيتين)
+                    var timeDiff = Math.abs(videoElement.currentTime - data.time);
+                    if (timeDiff > 2.0) {
+                        videoElement.currentTime = data.time;
+                    }
+                }
+            };
+            xhr.send();
+        }
+
+        // تحديث كل ثانية للحصول على مزامنة "لحظية"
+        setInterval(function() {
+            updatePresence();
+            syncWithAdmin();
+        }, 1000);
+
+        // تفعيل الصوت عند أول ضغطة للمستخدم (بسبب قيود المتصفحات)
+        document.body.onclick = function() {
+            videoElement.muted = false;
+        };
+
     </script>
 </body>
 </html>
