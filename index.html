@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مشغل فيديو أيفون المتطور</title>
+    <style>
+        /* تنسيق أنيق ليناسب واجهة الأيفون */
+        body {
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #000;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .video-container {
+            width: 90%;
+            max-width: 400px;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(255, 255, 255, 0.1);
+            background: #1a1a1a;
+            position: relative;
+        }
+
+        video {
+            width: 100%;
+            display: block;
+            /* خاصية هامة جداً للأيفون */
+            object-fit: cover; 
+        }
+
+        .status-tag {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            color: #fff;
+            padding: 5px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="video-container">
+        <div class="status-tag">تشغيل تلقائي</div>
+        <video 
+            id="myVideo" 
+            autoplay 
+            muted 
+            playsinline 
+            controls>
+            <source src="https://www.w3schools.com/html/mov_bbb.mp4" type="video/mp4">
+        </video>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics.js";
+        import { getStorage, ref, getDownloadURL } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-storage.js";
+
+        // إعدادات Firebase الخاصة بك
+        const firebaseConfig = {
+            apiKey: "AIzaSyCDQm_qocYr7-QuAMIafyC6PuAzSbs8Q8k",
+            authDomain: "axnt-68677.firebaseapp.com",
+            databaseURL: "https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "axnt-68677",
+            storageBucket: "axnt-68677.firebasestorage.app",
+            messagingSenderId: "838335964467",
+            appId: "1:838335964467:web:5152329be098c9339a0a46",
+            measurementId: "G-D1XT800Y0M"
+        };
+
+        // تشغيل Firebase
+        const app = initializeApp(firebaseConfig);
+        const storage = getStorage(app);
+
+        const videoElement = document.getElementById('myVideo');
+
+        // دالة جلب الفيديو من Storage وتشغيله
+        async function playFirebaseVideo() {
+            try {
+                // ملاحظة: استبدل 'your-video.mp4' باسم ملفك الفعلي في Firebase Storage
+                const videoRef = ref(storage, 'your-video.mp4'); 
+                const url = await getDownloadURL(videoRef);
+                
+                videoElement.src = url;
+
+                // محاولة التشغيل الإجباري
+                await videoElement.play();
+                console.log("الطفل (الكود) يعمل بنجاح!");
+            } catch (error) {
+                console.log("التشغيل التلقائي يعمل حالياً على الفيديو التجريبي، تأكد من رفع ملفك لـ Firebase.");
+            }
+        }
+
+        // تنفيذ الوظيفة بمجرد تحميل الصفحة
+        window.addEventListener('load', () => {
+            // نضمن أن الفيديو صامت لأن الأيفون يرفض التشغيل التلقائي بصوت
+            videoElement.muted = true;
+            playFirebaseVideo();
+        });
+    </script>
+</body>
+</html>
