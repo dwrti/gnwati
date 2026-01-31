@@ -3,95 +3,73 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>شاشة العرض المزامنة 📺</title>
+    <title>مشغل المزامنة الكامل 📺</title>
     
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     
     <style>
-        /* تصميم سينمائي - شاشة كاملة */
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body, html { 
-            width: 100%; height: 100%; 
-            background-color: #000; 
-            overflow: hidden; 
-            font-family: sans-serif;
+        /* تصميم يركز على الفيديو فقط */
+        html, body { 
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            background-color: #000; overflow: hidden; 
         }
 
-        .video-container {
-            position: relative;
+        #videoContainer {
             width: 100vw;
             height: 100vh;
             display: flex;
-            justify-content: center;
             align-items: center;
+            justify-content: center;
+            background: #000;
         }
 
-        video {
-            width: 100%;
-            height: 100%;
+        video { 
+            width: 100%; 
+            height: 100%; 
             object-fit: contain; /* يحافظ على أبعاد الفيديو الأصلي */
         }
 
-        /* تنبيه تفعيل الصوت */
-        #muteOverlay {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background: rgba(255, 0, 0, 0.7);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 30px;
-            cursor: pointer;
-            z-index: 100;
-            display: none;
-            animation: pulse 1.5s infinite;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
-
-        .status-dot {
-            position: absolute;
-            bottom: 10px;
-            left: 10px;
-            width: 10px;
-            height: 10px;
-            background: #4caf50;
-            border-radius: 50%;
-            opacity: 0.5;
+        /* رسالة توضيحية تختفي */
+        #overlay {
+            position: absolute; top: 10px; left: 10px;
+            background: rgba(0,0,0,0.5); color: #fff;
+            padding: 5px 10px; border-radius: 5px; font-size: 12px;
+            pointer-events: none; z-index: 10;
         }
     </style>
 </head>
-<body>
+<body onclick="forceFullscreen()">
 
-    <div class="video-container">
-        <div id="muteOverlay" onclick="unmuteVideo()">اضغط هنا لتفعيل الصوت 🔊</div>
-        <video id="remotePlayer" playsinline></video>
-        <div class="status-dot"></div>
+    <div id="overlay">وضع المزامنة النشط (صامت) 🔒</div>
+
+    <div id="videoContainer">
+        <video id="myPlayer" autoplay playsinline muted></video>
     </div>
 
     <script>
-        var video = document.getElementById('remotePlayer');
-        var muteOverlay = document.getElementById('muteOverlay');
+        var videoElement = document.getElementById('myPlayer');
         var hls = new Hls();
         var dbUrl = "https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app/live_stream.json";
-        var presenceUrl = "https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app/presence";
-        var lastUrl = "";
-        var myUserId = "viewer_" + Math.random().toString(36).substring(7);
+        var lastUrl = ""; 
+        var isAdmin = window.location.hash === "#ana";
 
-        // تحديث التواجد (لإظهار المتصلين عند الأدمن)
-        function updatePresence() {
-            var xhr = new XMLHttpRequest();
-            xhr.open("PUT", presenceUrl + "/" + myUserId + ".json", true);
-            xhr.send(JSON.stringify(Date.now()));
+        // وظيفة ملء الشاشة الإجباري
+        function forceFullscreen() {
+            var elem = document.documentElement;
+            if (elem.requestFullscreen) {
+                elem.requestFullscreen();
+            } else if (elem.webkitRequestFullscreen) { /* Safari */
+                elem.webkitRequestFullscreen();
+            } else if (elem.msRequestFullscreen) { /* IE11 */
+                elem.msRequestFullscreen();
+            }
+            // إذا أراد المستخدم تشغيل الصوت يدوياً بعد أول ضغطة
+            // videoElement.muted = false; 
         }
 
         function playMedia(url) {
             if (!url) { 
-                video.src = ""; 
+                videoElement.src = ""; 
                 if (hls) hls.destroy(); 
                 lastUrl = ""; 
                 return; 
@@ -100,74 +78,71 @@
             lastUrl = url;
 
             if (Hls.isSupported() && (url.includes('m3u8') || url.includes('.ts'))) {
-                hls.destroy();
+                hls.destroy(); 
                 hls = new Hls();
-                hls.loadSource(url);
-                hls.attachMedia(video);
-            } else {
-                video.src = url;
+                hls.loadSource(url); 
+                hls.attachMedia(videoElement);
+            } else { 
+                videoElement.src = url; 
             }
-
-            attemptPlay();
+            
+            // محاولة التشغيل صامتاً لضمان القبول
+            videoElement.muted = true;
+            videoElement.play().catch(e => console.log("خطأ في التشغيل التلقائي:", e));
         }
 
-        function attemptPlay() {
-            var playPromise = video.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(function() {
-                    video.muted = true;
-                    video.play();
-                    muteOverlay.style.display = "block";
-                });
+        function syncPlayer(data) {
+            if (!data) return;
+            
+            // مزامنة الرابط
+            if (data.url !== lastUrl) {
+                playMedia(data.url);
+            }
+            
+            // مزامنة الوقت (فارق ثانية واحدة للتصحيح)
+            var timeDiff = Math.abs(videoElement.currentTime - data.time);
+            if (timeDiff > 1.5) {
+                videoElement.currentTime = data.time;
+            }
+            
+            // مزامنة الحالة (تشغيل/إيقاف)
+            if (data.status === "playing" && videoElement.paused) {
+                videoElement.play();
+            } else if (data.status === "paused" && !videoElement.paused) {
+                videoElement.pause();
             }
         }
 
-        function unmuteVideo() {
-            video.muted = false;
-            muteOverlay.style.display = "none";
-        }
-
-        function syncWithDatabase() {
+        function loadStream() {
             var xhr = new XMLHttpRequest();
             xhr.open("GET", dbUrl, true);
-            xhr.onload = function() {
+            xhr.onload = function () {
                 if (xhr.status === 200) {
                     var data = JSON.parse(xhr.responseText);
-                    if (!data || data.syncEnabled === false) return;
-
-                    // 1. مزامنة الرابط
-                    if (data.url !== lastUrl) {
-                        playMedia(data.url);
-                    }
-
-                    // 2. مزامنة الوقت (إذا زاد الفارق عن ثانيتين)
-                    var timeDiff = Math.abs(video.currentTime - data.time);
-                    if (timeDiff > 2) {
-                        video.currentTime = data.time;
-                    }
-
-                    // 3. مزامنة الحالة (تشغيل/إيقاف)
-                    if (data.status === "playing" && video.paused) {
-                        attemptPlay();
-                    } else if (data.status === "paused" && !video.paused) {
-                        video.pause();
-                    }
+                    syncPlayer(data);
                 }
             };
             xhr.send();
         }
 
-        // تحديث دوري سريع للمزامنة (كل ثانية لضمان الدقة)
-        setInterval(function() {
-            syncWithDatabase();
-            updatePresence();
-        }, 1000);
+        // تحديث لحظي كل ثانية لجعلها "مزامنة لحظية" فعلاً
+        setInterval(loadStream, 1000);
 
-        // محاولة التشغيل عند أول تفاعل للمستخدم مع الصفحة
-        document.body.addEventListener('click', function() {
-            if (video.paused && lastUrl) attemptPlay();
-        }, { once: true });
+        // إذا كان المستخدم هو الأدمن، نرسل التحديثات للقاعدة
+        if (isAdmin) {
+            videoElement.muted = false; // الأدمن غالباً يحتاج الصوت
+            setInterval(function() {
+                var xhr = new XMLHttpRequest();
+                xhr.open("PATCH", dbUrl, true);
+                var state = { 
+                    status: videoElement.paused ? "paused" : "playing", 
+                    time: videoElement.currentTime 
+                };
+                xhr.send(JSON.stringify(state));
+            }, 2000);
+        }
 
+        window.onload = loadStream;
     </script>
 </body>
 </html>
