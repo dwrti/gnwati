@@ -7,7 +7,7 @@
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
-        video { width: 100%; height: 100vh; background: #000; outline: none; }
+        video { width: 100%; height: 100vh; background: #000; }
     </style>
 </head>
 <body>
@@ -25,26 +25,33 @@
                 hls.destroy(); hls = new Hls();
                 hls.loadSource(url); hls.attachMedia(v);
             } else { v.src = url; }
-            v.play().catch(() => v.muted = true);
+            v.play().catch(() => { v.muted = true; v.play(); });
         }
 
         async function sync() {
             try {
-                const res = await fetch(db);
+                const res = await fetch(db + "?nocache=" + Date.now());
                 const data = await res.json();
-                if (data && data.syncEnabled !== false) {
-                    play(data.url);
-                    if (Math.abs(v.currentTime - data.time) > 3) v.currentTime = data.time;
-                    data.status === "playing" ? v.play() : v.pause();
+                if (!data || data.syncEnabled === false) return;
+
+                play(data.url);
+
+                // مزامنة الوقت فقط إذا كان الفارق كبيراً (أكثر من 3 ثوانٍ)
+                if (Math.abs(v.currentTime - data.time) > 3) {
+                    v.currentTime = data.time;
+                }
+
+                // إصلاح مشكلة التوقف: لا نرسل أمر تشغيل إذا كان المقطع يعمل أصلاً
+                if (data.status === "playing" && v.paused) {
+                    v.play().catch(() => {});
+                } else if (data.status === "paused" && !v.paused) {
+                    v.pause();
                 }
             } catch (e) {}
         }
 
-        // تحديث كل ثانيتين لمواكبة المشغل الرئيسي
         setInterval(sync, 2000);
-        
-        // تفاعل أولي للسماح بالصوت
-        document.body.onclick = () => v.muted = false;
+        document.body.onclick = () => { if(v.muted) v.muted = false; };
     </script>
 </body>
 </html>
