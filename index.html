@@ -1,57 +1,66 @@
 <!DOCTYPE html>
-<html lang="ar">
+<html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مشغل متزامن 📺</title>
+    <title>مشاهدة 📺</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
-        body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
+        body, html { margin: 0; padding: 0; background: #000; width: 100%; height: 100%; overflow: hidden; }
         video { width: 100%; height: 100vh; background: #000; }
+        #status { position: fixed; top: 10px; right: 10px; color: #4caf50; font-size: 12px; z-index: 10; pointer-events: none; }
     </style>
 </head>
 <body>
-
-    <video id="player" controls autoplay playsinline></video>
+    <div id="status">متصل ●</div>
+    <video id="v" controls autoplay playsinline></video>
 
     <script>
-        const v = document.getElementById('player');
-        let hls = new Hls(), lastUrl = "", db = "https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app/live_stream.json";
+        const video = document.getElementById('v');
+        const hls = new Hls();
+        const dbUrl = "https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app/live_stream.json";
+        let lastUrl = "";
 
         function play(url) {
             if (!url || url === lastUrl) return;
             lastUrl = url;
             if (Hls.isSupported() && url.includes('m3u8')) {
-                hls.destroy(); hls = new Hls();
-                hls.loadSource(url); hls.attachMedia(v);
-            } else { v.src = url; }
-            v.play().catch(() => { v.muted = true; v.play(); });
+                hls.loadSource(url); hls.attachMedia(video);
+            } else { video.src = url; }
+            video.play().catch(() => video.muted = true);
         }
 
         async function sync() {
             try {
-                const res = await fetch(db + "?nocache=" + Date.now());
+                const res = await fetch(dbUrl);
                 const data = await res.json();
                 if (!data || data.syncEnabled === false) return;
 
+                // مزامنة الرابط
                 play(data.url);
 
-                // مزامنة الوقت فقط إذا كان الفارق كبيراً (أكثر من 3 ثوانٍ)
-                if (Math.abs(v.currentTime - data.time) > 3) {
-                    v.currentTime = data.time;
+                // مزامنة الوقت (فرق أكثر من 3 ثواني)
+                if (Math.abs(video.currentTime - data.time) > 3) {
+                    video.currentTime = data.time;
                 }
 
-                // إصلاح مشكلة التوقف: لا نرسل أمر تشغيل إذا كان المقطع يعمل أصلاً
-                if (data.status === "playing" && v.paused) {
-                    v.play().catch(() => {});
-                } else if (data.status === "paused" && !v.paused) {
-                    v.pause();
-                }
-            } catch (e) {}
+                // مزامنة حالة التشغيل
+                if (data.status === "playing" && video.paused) video.play();
+                else if (data.status === "paused" && !video.paused) video.pause();
+                
+            } catch (e) { console.error("Sync Error"); }
         }
 
+        // تحديث المزامنة كل ثانيتين
         setInterval(sync, 2000);
-        document.body.onclick = () => { if(v.muted) v.muted = false; };
+        
+        // إرسال التواجد (Presence)
+        const myId = Math.random().toString(36).substr(7);
+        setInterval(() => {
+            fetch(`https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app/presence/${myId}.json`, {
+                method: 'PUT', body: JSON.stringify(Date.now())
+            });
+        }, 5000);
     </script>
 </body>
 </html>
