@@ -2,212 +2,144 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>دورتي المباشرة 📺</title>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مشغل المزامنة السريع ⚡</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    
     <style>
-        /* حافظت على نفس تصميمك الأنيق مع تحسينات بسيطة */
-        html, body { 
-            margin: 0; padding: 0; width: 100%; height: 100%; 
-            background-color: #000; color: #eee;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow-x: hidden;
-        }
-
-        body { display: flex; flex-direction: column; align-items: center; }
-
-        .card { 
-            position: sticky; top: 0; z-index: 1000; 
-            background: #000; width: 100%; max-width: 800px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.8);
-        }
+        :root { --primary: #007bff; --bg: #0a0a0a; --card: #161616; --text: #e0e0e0; }
+        body { margin: 0; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, sans-serif; display: flex; flex-direction: column; align-items: center; min-height: 100vh; }
         
-        video { width: 100%; aspect-ratio: 16/9; background: #000; display: block; }
+        /* مشغل الفيديو */
+        .video-container { width: 100%; max-width: 900px; background: #000; position: sticky; top: 0; z-index: 100; box-shadow: 0 10px 30px rgba(0,0,0,0.5); }
+        video { width: 100%; aspect-ratio: 16/9; display: block; }
 
-        /* طبقة حماية لبدء التشغيل */
-        #overlay {
-            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0,0,0,0.9); z-index: 2000;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            cursor: pointer;
-        }
-
-        #admin { display: none; width: 95%; max-width: 650px; margin-top: 15px; }
-        input, select { 
-            width: 100%; padding: 12px; margin: 6px 0; 
-            border: 1px solid #222; border-radius: 8px; 
-            background: #0a0a0a; color: #fff;
-        }
-
-        .btn-group { display: flex; gap: 8px; margin-top: 8px; }
-        button { flex: 1; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: bold; border: 1px solid #222; }
+        /* لوحة التحكم */
+        .controls { width: 90%; max-width: 800px; padding: 20px; margin-top: 20px; }
+        .admin-panel { display: none; background: var(--card); padding: 15px; border-radius: 12px; border: 1px solid #333; margin-bottom: 20px; }
         
-        #statusText { text-align: center; color: #4caf50; font-weight: bold; margin: 10px; }
-        #librarySection { width: 95%; max-width: 700px; margin-bottom: 50px; }
+        input { width: 100%; padding: 12px; margin: 8px 0; background: #000; border: 1px solid #444; border-radius: 8px; color: #fff; box-sizing: border-box; }
+        button { cursor: pointer; padding: 10px 20px; border: none; border-radius: 8px; font-weight: bold; transition: 0.3s; }
+        .btn-main { background: var(--primary); color: white; width: 100%; margin-top: 10px; }
+        .btn-main:hover { opacity: 0.8; }
         
-        .ep-item { display: flex; background: #050505; margin: 4px 0; border-radius: 5px; }
-        .ep-name-clickable { flex-grow: 1; padding: 12px; text-align: center; cursor: pointer; }
+        /* مؤشرات الحالة */
+        .status-bar { display: flex; justify-content: space-between; font-size: 12px; color: #888; margin-top: 10px; }
+        .badge { padding: 4px 8px; border-radius: 4px; background: #222; }
+        .live-count { color: #4caf50; }
+
+        /* التنبيهات */
+        #toast { position: fixed; bottom: 20px; right: 20px; background: var(--primary); color: white; padding: 10px 20px; border-radius: 8px; display: none; z-index: 1000; animation: fadeIn 0.5s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
-    <div id="overlay" onclick="startApp()">
-        <h2 style="color: #4caf50;">انقر لدخول البث المباشر 🎥</h2>
-        <p>سيتم المزامنة فوراً مع الأدمن</p>
-    </div>
+<div class="video-container">
+    <video id="player" controls playsinline></video>
+</div>
 
-    <div class="card">
-        <video id="myPlayer" controls playsinline></video>
-    </div>
-
-    <div id="admin">
-        <div id="viewerCount" style="text-align:center; color:#4caf50; padding:10px;">المتصلون: --</div>
-        <input type="text" id="urlInput" placeholder="رابط سريع للبث..." onpaste="handlePaste(event)">
-        <div class="btn-group">
-            <button id="syncToggleBtn" onclick="toggleSync()">المزامنة</button>
-            <button style="background:#b71c1c; color:#fff" onclick="deleteVideo()">حذف الفيديو</button>
+<div class="controls">
+    <div id="adminArea" class="admin-panel">
+        <h3 style="margin-top:0">لوحة التحكم (أدمن) 🛠️</h3>
+        <input type="text" id="streamUrl" placeholder="ضع رابط الفيديو أو البث هنا...">
+        <button class="btn-main" onclick="updateStream()">تحديث البث للجميع 📡</button>
+        <div class="status-bar">
+            <span class="badge">المتصلين: <span id="count" class="live-count">1</span></span>
+            <span id="syncStatus" class="badge">المزامنة نشطة ✅</span>
         </div>
-        <div id="statusText"></div>
     </div>
 
-    <div id="librarySection">
-        <div id="episodesContainer"></div>
+    <div class="status-bar" id="viewerStatus">
+        <span>وضع المشاهدة المتزامنة</span>
+        <span id="connectionDot" style="color: #4caf50;">● متصل</span>
     </div>
+</div>
 
-    <script>
-        var videoElement = document.getElementById('myPlayer');
-        var hls = new Hls();
-        var dbUrl = "https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app/live_stream.json";
-        var isAdmin = window.location.hash === "#ana";
-        var lastUrl = "";
-        var isSyncEnabled = true;
-        var hasInteracted = false;
+<div id="toast"></div>
 
-        // دالة البدء لتجاوز قيود المتصفح
-        function startApp() {
-            hasInteracted = true;
-            document.getElementById('overlay').style.display = 'none';
-            videoElement.play().catch(() => {
-                videoElement.muted = true;
-                videoElement.play();
-            });
-            loadStream(); // أول تحميل بعد التفاعل
+<script>
+    const video = document.getElementById('player');
+    const dbUrl = "https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app/live_stream.json";
+    const isAdmin = window.location.hash === "#ana";
+    let lastUrl = "";
+    let isLocked = false; // لمنع حلقة التحديث اللانهائية
+
+    // إظهار لوحة الأدمن
+    if (isAdmin) {
+        document.getElementById('adminArea').style.display = 'block';
+        document.getElementById('viewerStatus').style.display = 'none';
+    }
+
+    // دالة التشغيل الذكية (HLS أو عادي)
+    function loadVideo(url) {
+        if (!url || url === lastUrl) return;
+        lastUrl = url;
+        if (Hls.isSupported() && url.includes('.m3u8')) {
+            const hls = new Hls();
+            hls.loadSource(url);
+            hls.attachMedia(video);
+        } else {
+            video.src = url;
         }
+        video.play().catch(() => {
+            showToast("تم كتم الصوت تلقائياً - اضغط لتفعيله");
+            video.muted = true;
+        });
+    }
 
-        function playMedia(url, time, status) {
-            if (!url) { 
-                videoElement.pause(); 
-                videoElement.src = ""; 
-                lastUrl = ""; 
-                return; 
-            }
+    // إرسال البيانات (للأدمن فقط)
+    function updateStream() {
+        const url = document.getElementById('streamUrl').value;
+        if (!url) return;
+        fetch(dbUrl, {
+            method: 'PATCH',
+            body: JSON.stringify({ url: url, time: 0, status: "playing", lastUpdated: Date.now() })
+        });
+        showToast("تم تحديث الرابط بنجاح ✅");
+    }
 
-            if (url !== lastUrl) {
-                lastUrl = url;
-                if (Hls.isSupported() && (url.includes('m3u8'))) {
-                    hls.destroy(); hls = new Hls();
-                    hls.loadSource(url); hls.attachMedia(videoElement);
-                } else {
-                    videoElement.src = url;
+    function syncToCloud() {
+        if (!isAdmin || video.paused) return;
+        fetch(dbUrl, {
+            method: 'PATCH',
+            body: JSON.stringify({ time: video.currentTime, status: "playing" })
+        });
+    }
+
+    // استقبال البيانات (للمشاهدين)
+    async function listenToCloud() {
+        try {
+            const response = await fetch(dbUrl);
+            const data = await response.json();
+            if (!data) return;
+
+            if (!isAdmin) {
+                loadVideo(data.url);
+                // مزامنة الوقت إذا كان الفارق أكبر من 3 ثواني
+                if (Math.abs(video.currentTime - data.time) > 3) {
+                    video.currentTime = data.time;
                 }
+                // مزامنة الحالة (تشغيل/إيقاف)
+                if (data.status === "playing" && video.paused) video.play();
+                if (data.status === "paused" && !video.paused) video.pause();
             }
+        } catch (e) { console.error("Sync Error"); }
+    }
 
-            // مزامنة الوقت والحالة
-            var diff = Math.abs(videoElement.currentTime - time);
-            if (diff > 2) videoElement.currentTime = time;
+    // نظام التنبيهات
+    function showToast(msg) {
+        const t = document.getElementById('toast');
+        t.innerText = msg;
+        t.style.display = 'block';
+        setTimeout(() => t.style.display = 'none', 3000);
+    }
 
-            if (status === "playing" && videoElement.paused) {
-                videoElement.play().catch(() => { videoElement.muted = true; videoElement.play(); });
-            } else if (status === "paused" && !videoElement.paused) {
-                videoElement.pause();
-            }
-        }
+    // التحديث الدوري
+    setInterval(() => {
+        listenToCloud();
+        if (isAdmin) syncToCloud();
+    }, 2000); // تحديث كل ثانيتين لضمان السرعة
 
-        function loadStream() {
-            fetch(dbUrl)
-            .then(response => response.json())
-            .then(data => {
-                if (!data) return;
-                isSyncEnabled = data.syncEnabled !== false;
-                
-                if (!isAdmin && isSyncEnabled && hasInteracted) {
-                    playMedia(data.url, data.time, data.status);
-                }
-                
-                // تحديث واجهة الأدمن
-                if (isAdmin) {
-                    document.getElementById('syncToggleBtn').innerText = isSyncEnabled ? "المزامنة: مفعلة ✅" : "المزامنة: معطلة ❌";
-                }
-            });
-        }
-
-        // تحديث حالة الأدمن فوراً عند الضغط على Play أو Pause
-        function updateAdminState() {
-            if (!isAdmin || !isSyncEnabled) return;
-            var state = {
-                url: lastUrl,
-                status: videoElement.paused ? "paused" : "playing",
-                time: videoElement.currentTime,
-                syncEnabled: isSyncEnabled
-            };
-            fetch(dbUrl, {
-                method: 'PATCH',
-                body: JSON.stringify(state)
-            });
-        }
-
-        // مراقبة أحداث المشغل للأدمن فقط
-        if (isAdmin) {
-            document.getElementById('admin').style.display = 'block';
-            ['play', 'pause', 'seeked'].forEach(ev => {
-                videoElement.addEventListener(ev, updateAdminState);
-            });
-        }
-
-        // حلقة التحديث المستمر (كل ثانية لمزامنة أدق)
-        setInterval(() => {
-            if (isAdmin) {
-                updateAdminState(); // الأدمن يرسل حالته
-            } else {
-                loadStream(); // المشاهد يستقبل الحالة
-            }
-        }, 1000);
-
-        function handlePaste(event) {
-            setTimeout(() => {
-                var val = document.getElementById('urlInput').value.trim();
-                if (val) {
-                    lastUrl = val;
-                    updateAdminState();
-                    document.getElementById('urlInput').value = '';
-                    showStatus("تم تحديث الرابط وبدء البث 🚀");
-                }
-            }, 100);
-        }
-
-        function showStatus(msg) {
-            var st = document.getElementById('statusText');
-            st.innerText = msg;
-            setTimeout(() => st.innerText = "", 3000);
-        }
-
-        // منع الحذف بالخطأ
-        function deleteVideo() {
-            if(confirm("هل تريد إيقاف البث للجميع؟")) {
-                fetch(dbUrl, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ url: "", status: "paused", time: 0 })
-                }).then(() => location.reload());
-            }
-        }
-
-        function toggleSync() {
-            isSyncEnabled = !isSyncEnabled;
-            updateAdminState();
-        }
-
-    </script>
+</script>
 </body>
 </html>
