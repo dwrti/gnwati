@@ -1,57 +1,50 @@
 <!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="ar">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مشغل مستقر</title>
+    <title>مشغل متزامن 📺</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
     <style>
         body, html { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
-        video { width: 100%; height: 100%; }
+        video { width: 100%; height: 100vh; background: #000; outline: none; }
     </style>
 </head>
 <body>
-    <video id="v" controls playsinline></video>
+
+    <video id="player" controls autoplay playsinline></video>
 
     <script>
-        var v = document.getElementById('v'), h = new Hls(), lastUrl = "",
-            db = "https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app/live_stream.json";
+        const v = document.getElementById('player');
+        let hls = new Hls(), lastUrl = "", db = "https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app/live_stream.json";
 
-        function sync() {
-            fetch(db).then(r => r.json()).then(data => {
-                if (!data || data.syncEnabled === false) return;
-
-                // 1. تغيير الرابط فقط إذا اختلف فعلياً
-                if (data.url && data.url !== lastUrl) {
-                    lastUrl = data.url;
-                    if (Hls.isSupported() && lastUrl.includes('m3u8')) {
-                        h.destroy(); h = new Hls(); h.loadSource(lastUrl); h.attachMedia(v);
-                    } else { v.src = lastUrl; }
-                }
-
-                // 2. مزامنة الوقت: فقط إذا الفارق أكبر من 3 ثوانٍ لتجنب التقطيع (Stutter)
-                var diff = Math.abs(v.currentTime - data.time);
-                if (diff > 3) {
-                    v.currentTime = data.time;
-                }
-
-                // 3. التحكم في التشغيل والإيقاف بحذر
-                if (data.status === "playing") {
-                    if (v.paused) {
-                        v.play().catch(() => { 
-                            v.muted = true; // كتم الصوت إجباري للتشغيل التلقائي
-                            v.play(); 
-                        });
-                    }
-                } else if (data.status === "paused") {
-                    if (!v.paused) v.pause();
-                }
-            }).catch(e => console.log("خطأ في الاتصال"));
+        function play(url) {
+            if (!url || url === lastUrl) return;
+            lastUrl = url;
+            if (Hls.isSupported() && url.includes('m3u8')) {
+                hls.destroy(); hls = new Hls();
+                hls.loadSource(url); hls.attachMedia(v);
+            } else { v.src = url; }
+            v.play().catch(() => v.muted = true);
         }
 
-        // تحديث كل 3 ثوانٍ (أخف على المتصفح وأقل تقطيعاً)
-        setInterval(sync, 3000);
-        sync();
+        async function sync() {
+            try {
+                const res = await fetch(db);
+                const data = await res.json();
+                if (data && data.syncEnabled !== false) {
+                    play(data.url);
+                    if (Math.abs(v.currentTime - data.time) > 3) v.currentTime = data.time;
+                    data.status === "playing" ? v.play() : v.pause();
+                }
+            } catch (e) {}
+        }
+
+        // تحديث كل ثانيتين لمواكبة المشغل الرئيسي
+        setInterval(sync, 2000);
+        
+        // تفاعل أولي للسماح بالصوت
+        document.body.onclick = () => v.muted = false;
     </script>
 </body>
 </html>
