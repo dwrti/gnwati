@@ -2,162 +2,65 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>مشاهدة مباشرة 📺</title>
-    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>مشاهدة 📺</title>
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
-    
     <style>
-        /* إعدادات الواجهة البسيطة */
-        html, body { 
-            margin: 0; padding: 0; width: 100%; height: 100%; 
-            background-color: #000; color: #eee;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            overflow: hidden; /* لمنع التمرير غير الضروري */
-        }
-
-        .video-container {
-            width: 100vw;
-            height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            background: #000;
-        }
-
-        video { 
-            width: 100%; 
-            max-height: 100%;
-            aspect-ratio: 16/9; 
-            outline: none; 
-        }
-
-        /* رسالة التنبيه في حال كتم الصوت التلقائي */
-        #interactionOverlay {
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 255, 0, 0.2);
-            color: #4caf50;
-            padding: 10px 20px;
-            border-radius: 20px;
-            font-size: 14px;
-            z-index: 2000;
-            display: none;
-            backdrop-filter: blur(5px);
-            border: 1px solid #4caf50;
-        }
+        body, html { margin: 0; padding: 0; background: #000; width: 100%; height: 100%; overflow: hidden; }
+        video { width: 100%; height: 100vh; background: #000; }
+        #status { position: fixed; top: 10px; right: 10px; color: #4caf50; font-size: 12px; z-index: 10; pointer-events: none; }
     </style>
 </head>
 <body>
-
-    <div id="interactionOverlay">تم بدء البث.. اضغط لتفعيل الصوت 🔊</div>
-
-    <div class="video-container">
-        <video id="viewerPlayer" controls autoplay playsinline></video>
-    </div>
+    <div id="status">متصل ●</div>
+    <video id="v" controls autoplay playsinline></video>
 
     <script>
-        var videoElement = document.getElementById('viewerPlayer');
-        var hls = new Hls();
-        var dbUrl = "https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app/live_stream.json";
-        var presenceUrl = "https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app/presence";
-        var lastUrl = ""; 
-        var myUserId = "viewer_" + Math.random().toString(36).substring(7);
+        const video = document.getElementById('v');
+        const hls = new Hls();
+        const dbUrl = "https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app/live_stream.json";
+        let lastUrl = "";
 
-        // إرسال التواجد (Presence) ليظهر عند الأدمن في العداد
-        function updatePresence() {
-            var xhr = new XMLHttpRequest();
-            xhr.open("PUT", presenceUrl + "/" + myUserId + ".json", true);
-            xhr.send(JSON.stringify(Date.now()));
-        }
-
-        function playMedia(url) {
-            if (!url) { 
-                videoElement.src = ""; 
-                if (hls) hls.destroy(); 
-                lastUrl = ""; 
-                return; 
-            }
-            if (url === lastUrl) return;
+        function play(url) {
+            if (!url || url === lastUrl) return;
             lastUrl = url;
-
-            if (Hls.isSupported() && (url.includes('m3u8') || url.includes('.ts'))) {
-                hls.destroy(); 
-                hls = new Hls();
-                hls.loadSource(url); 
-                hls.attachMedia(videoElement);
-            } else { 
-                videoElement.src = url; 
-            }
-            
-            attemptPlay();
+            if (Hls.isSupported() && url.includes('m3u8')) {
+                hls.loadSource(url); hls.attachMedia(video);
+            } else { video.src = url; }
+            video.play().catch(() => video.muted = true);
         }
 
-        function attemptPlay() {
-            var playPromise = videoElement.play();
-            if (playPromise !== undefined) {
-                playPromise.catch(function(error) {
-                    // إذا منع المتصفح التشغيل التلقائي بالصوت
-                    videoElement.muted = true;
-                    videoElement.play();
-                    showOverlay();
-                });
-            }
-        }
+        async function sync() {
+            try {
+                const res = await fetch(dbUrl);
+                const data = await res.json();
+                if (!data || data.syncEnabled === false) return;
 
-        function showOverlay() {
-            var overlay = document.getElementById('interactionOverlay');
-            overlay.style.display = "block";
-            setTimeout(function() { overlay.style.display = "none"; }, 5000);
-        }
+                // مزامنة الرابط
+                play(data.url);
 
-        function syncWithAdmin() {
-            var xhr = new XMLHttpRequest();
-            xhr.open("GET", dbUrl, true);
-            xhr.onload = function () {
-                if (xhr.status === 200) {
-                    var data = JSON.parse(xhr.responseText);
-                    if (!data) return;
-
-                    // 1. مزامنة الرابط
-                    if (data.url !== lastUrl) {
-                        playMedia(data.url);
-                    }
-
-                    // 2. مزامنة حالة التشغيل (إيقاف/تشغيل)
-                    if (data.status === "playing" && videoElement.paused) {
-                        videoElement.play().catch(() => { videoElement.muted = true; videoElement.play(); });
-                    } else if (data.status === "paused" && !videoElement.paused) {
-                        videoElement.pause();
-                    }
-
-                    // 3. مزامنة الوقت (إذا كان الفارق كبيراً)
-                    var timeDiff = Math.abs(videoElement.currentTime - data.time);
-                    if (timeDiff > 3) { // سماحية 3 ثواني لتجنب التقطيع
-                        videoElement.currentTime = data.time;
-                    }
+                // مزامنة الوقت (فرق أكثر من 3 ثواني)
+                if (Math.abs(video.currentTime - data.time) > 3) {
+                    video.currentTime = data.time;
                 }
-            };
-            xhr.send();
+
+                // مزامنة حالة التشغيل
+                if (data.status === "playing" && video.paused) video.play();
+                else if (data.status === "paused" && !video.paused) video.pause();
+                
+            } catch (e) { console.error("Sync Error"); }
         }
 
         // تحديث المزامنة كل ثانيتين
-        setInterval(function() {
-            updatePresence();
-            syncWithAdmin();
-        }, 2000);
-
-        // عند تفاعل المستخدم، نقوم بإلغاء الكتم
-        videoElement.addEventListener('click', function() {
-            videoElement.muted = false;
-        });
-
-        window.onload = function() {
-            syncWithAdmin();
-            updatePresence();
-        };
+        setInterval(sync, 2000);
+        
+        // إرسال التواجد (Presence)
+        const myId = Math.random().toString(36).substr(7);
+        setInterval(() => {
+            fetch(`https://axnt-68677-default-rtdb.europe-west1.firebasedatabase.app/presence/${myId}.json`, {
+                method: 'PUT', body: JSON.stringify(Date.now())
+            });
+        }, 5000);
     </script>
 </body>
 </html>
